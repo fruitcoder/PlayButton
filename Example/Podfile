@@ -1,0 +1,11 @@
+use_frameworks!
+
+target 'PlayButton_Example' do
+  pod 'PlayButton', :path => '../'
+
+  target 'PlayButton_Tests' do
+    inherit! :search_paths
+
+    
+  end
+end
