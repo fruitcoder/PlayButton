@@ -1,0 +1,16 @@
+PODS:
+  - PlayButton (0.1.0)
+
+DEPENDENCIES:
+  - PlayButton (from `../`)
+
+EXTERNAL SOURCES:
+  PlayButton:
+    :path: ../
+
+SPEC CHECKSUMS:
+  PlayButton: a6267ae7f8149db80e9c4eda52ea7dd2495ed8dd
+
+PODFILE CHECKSUM: 7e5d306d2df6cb7171a6aad15d0c18e99bbe85dd
+
+COCOAPODS: 1.0.0

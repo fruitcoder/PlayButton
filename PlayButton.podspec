@@ -9,24 +9,14 @@
 Pod::Spec.new do |s|
   s.name             = 'PlayButton'
   s.version          = '0.1.0'
-  s.summary          = 'A short description of PlayButton.'
-
-# This description is used to generate tags and improve search results.
-#   * Think: What does it do? Why did you write it? What is the focus?
-#   * Try to keep it short, snappy and to the point.
-#   * Write the description between the DESC delimiters below.
-#   * Finally, don't worry about the indent, CocoaPods strips it!
-
-  s.description      = <<-DESC
-TODO: Add long description of the pod here.
-                       DESC
-
+  s.summary          = 'A subclass on UIButton that animates its state between a playing and a paused state.'
+  s.description      = 'This CocoaPod is a small part of a feature upcoming media player, that is currently under development and will be open sourced once it's stable. Since the button itself can be used in other projects as a button that switches between play and pause, it makes sense to have it as a separate CocoaPod. The special thing about the animation is that the CAKeyframe animation reverses when the user touches the button during animation. Since this is still not working 100% it remains in a different branch and is open for testing.'
   s.homepage         = 'https://github.com/<GITHUB_USERNAME>/PlayButton'
   # s.screenshots     = 'www.example.com/screenshots_1', 'www.example.com/screenshots_2'
   s.license          = { :type => 'MIT', :file => 'LICENSE' }
   s.author           = { 'Alexander Hüllmandel' => 'alx91@me.com' }
   s.source           = { :git => 'https://github.com/<GITHUB_USERNAME>/PlayButton.git', :tag => s.version.to_s }
-  # s.social_media_url = 'https://twitter.com/<TWITTER_USERNAME>'
+  s.social_media_url = 'https://twitter.com/hllmandel'
 
   s.ios.deployment_target = '8.0'
 
