@@ -6,9 +6,18 @@
 
 ## Overview
 
-This project serves two purposes: 
+This project serves two purposes:
+
 1. It's a button I might use in another open source project (a customizable media player) but you can use it in your projects as well, if you just want the animated button and not the entire player. 
-2. I wanted to create an animation + secondary animation that is reversible through user interaction. WHAT? Okay, so the whole state transition is one keyframe animation, but I cannot just "reverse" the animation, because the secondary animation (animation caused by the movement of the right pause layer) behaves differently depending on the direction (this influences the bending of the line). Since the solution I came up with is not that perfect, which partly results from wrong timing functions, the reversble animation is under another branch and you can just check it out. I consider switching from the `CADisplayLink` approach to a custom layer property animation, where `progress` would range from `0.0` to `1.0` and when there is still an animation going on while hitting the button I would remove the animation and add the reverse animation with `1.0 - progress`. That way I could avoid all the state tracking. 
+
+2. I wanted to create an animation + secondary animation that is reversible through user interaction. WHAT? Okay, so the whole state transition is one keyframe animation, but I cannot just "reverse" the animation, because the secondary animation (animation caused by the movement of the right pause layer) behaves differently depending on the direction (this influences the bending of the line). Since the solution I came up with is not that perfect, which partly results from wrong timing functions, the reversble animation is under the `develop` branch and you can just check it out. I consider switching from the `CADisplayLink` approach to a custom layer property animation, where `progress` would range from `0.0` to `1.0` and when there is still an animation going on while hitting the button I would remove the animation and add the reverse animation with `1.0 - progress`. That way I could avoid all the state tracking. 
+
+## Try `develop`
+If you want to see how the reversible animation works, take a look at the `develop` branch, or - if you just want to use it - paste this:
+
+```ruby
+pod 'PlayButton', :git => 'https://github.com/fruitcoder/PlayButton.git', :commit => '7b287f7'
+```
 
 ## Demo
 ![alt tag](PlayPause.gif) 
@@ -36,11 +45,22 @@ To run the example project, clone the repo, and run `pod install` from the Examp
 ## Installation
 
 PlayButton is available through [CocoaPods](http://cocoapods.org). To install
-it, simply add the following line to your Podfile:
+it, simply add the following lines to your Podfile:
 
 ```ruby
-pod "PlayButton"
+use_frameworks!
+
+target '<Your Target Name>' do
+  pod 'PlayButton'
+end
 ```
+
+Then, run the following command:
+
+```bash
+$ pod install
+```
+
 
 ## Author
 
