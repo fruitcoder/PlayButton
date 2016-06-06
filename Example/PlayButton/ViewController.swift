@@ -7,18 +7,26 @@
 //
 
 import UIKit
+import PlayButton
 
 class ViewController: UIViewController {
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        // Do any additional setup after loading the view, typically from a nib.
-    }
+  // button created from code
+  @IBAction func playButtonPressed(sender: PlayButton) {
+    sender.setButtonAction(sender.buttonAction.reverseAction, animated: true)
+  }
+  
+  override func viewDidLoad() {
+    super.viewDidLoad()
 
-    override func didReceiveMemoryWarning() {
-        super.didReceiveMemoryWarning()
-        // Dispose of any resources that can be recreated.
-    }
-
+    let playButton = PlayButton(origin: CGPoint(x: 100, y: 100), width: 30.0, initialAction: .Pause)
+    playButton.addTarget(self, action: #selector(tap), forControlEvents: .TouchUpInside)
+    //view.addSubview(playButton)
+  }
+  
+  // programmatically created button
+  func tap(button: PlayButton!) {
+    button.setButtonAction(button.buttonAction.reverseAction, animated: true)
+  }
 }
 
