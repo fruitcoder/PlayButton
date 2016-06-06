@@ -76,6 +76,7 @@ public class PlayButton: UIButton {
     }
   }
   
+  private var displayLink: CADisplayLink!
   private enum Animation: String {
     case LeftPlayToPause, RightPlayToPause, LeftPauseToPlay, RightPauseToPlay
     
@@ -210,18 +211,58 @@ public class PlayButton: UIButton {
     ///  Returns a keyframe animation with given parameters
     ///
     ///  - parameter duration:   how long the animation should take in total
+    ///  - parameter timeOffset: `timeOffset` describes the progress of the animation. If `timeOffset = 0.0` it starts from the beginning, if `timeOffset = 0.5` it starts at 50%
     ///  - parameter lineWidth:  how thick the paused line is
     ///  - parameter scale:      how small the button is scaled during animation
     ///  - parameter bounds:     the bounds of the button
     ///
     ///  - returns: Returns a keyframe animation with given parameters
-    func keyframeAnimation(withDuration duration: CFTimeInterval, lineWidth: CGFloat, scale: CGFloat, bounds: CGRect) -> CAKeyframeAnimation {
+    func keyframeAnimation(withDuration duration: CFTimeInterval, lineWidth: CGFloat, scale: CGFloat, bounds: CGRect, timeOffset: CFTimeInterval = 0.0, fromValue: CGPath? = nil) -> CAKeyframeAnimation {
       let animation = CAKeyframeAnimation(keyPath: "path")
-      animation.duration = duration
+      animation.duration = (1.0 - timeOffset) * duration
       
-      animation.values = keyframes(forLineWidth: lineWidth, atScale: scale, bounds: bounds)
-      animation.keyTimes = self.keyTimes
-      animation.timingFunctions = self.timingFunctions
+      let keyFrames: [CGPath]
+      let keyTimes: [Float]
+      let timingFunctions: [CAMediaTimingFunction]?
+      
+      if let fromValue = fromValue {
+        let indexOfNextKeyframe = timeOffset == 0.0 ? 0 : self.keyTimes.indexOf({ $0 > Float(timeOffset) })! // seems the same as Swift 3.0's first(where:)...
+  
+        // keyframes
+        var keyFrameSubset = Array(keyframes(forLineWidth: lineWidth, atScale: scale, bounds: bounds).suffixFrom(indexOfNextKeyframe))
+        if indexOfNextKeyframe != 0 { keyFrameSubset.insert(fromValue, atIndex: 0) }
+        
+        // times
+        var keyTimeSubset = Array(self.keyTimes.suffixFrom(indexOfNextKeyframe))
+        if indexOfNextKeyframe != 0 {
+          keyTimeSubset = keyTimeSubset.map({ ($0 - Float(timeOffset)) * Float(duration/animation.duration) }) // convert time space
+          keyTimeSubset.insert(0.0, atIndex: 0)
+        }
+        
+        // timing functions
+        var timingFunctionsSubset: [CAMediaTimingFunction]?
+        if let functions = self.timingFunctions {
+          if indexOfNextKeyframe == 0 { // take all timing functions
+            timingFunctionsSubset = functions
+          } else {
+            timingFunctionsSubset = Array(functions.suffixFrom(indexOfNextKeyframe))
+          }
+        } else {
+          timingFunctionsSubset = nil
+        }
+        
+        keyFrames = keyFrameSubset
+        keyTimes = keyTimeSubset
+        timingFunctions = timingFunctionsSubset
+      } else {
+        keyFrames = keyframes(forLineWidth: lineWidth, atScale: scale, bounds: bounds)
+        keyTimes = self.keyTimes
+        timingFunctions = self.timingFunctions
+      }
+      
+      animation.values = keyFrames
+      animation.keyTimes = keyTimes
+      animation.timingFunctions = timingFunctions
       
       return animation
     }
@@ -302,81 +343,157 @@ public class PlayButton: UIButton {
     return $0
   }(CAShapeLayer())
   
-  ///  Set the button action for the button. If the `action` is the same as `buttonAction`, nothing happens. If `animated` is `true` the animation will take `animationDuration` seconds, when there is no animation currently going on. If `animated` is `false` or there is already an ongoing animation, the state will be immidiately set
-  ///
-  ///  - parameter action:   The new button action
-  ///  - parameter animated: Determines whether the state change should be animated (with duration `animationDuration`)
   public func setButtonAction(action: PlayAction, animated: Bool) {
     guard buttonAction != action else { return }
     
     buttonAction = action
     
-    switch buttonAction {
-    case .Pause:
-      if !animated || leftShapeLayer.animationForKey(Animation.LeftPauseToPlay.key) != nil { // ongoing animation is cancelled
-        setModelToFinalPath()
-      } else {
-        setModelToFinalPath()
-        
-        // left layer
-        leftShapeLayer.addAnimation(Animation.LeftPlayToPause.keyframeAnimation(withDuration: animationDuration,
-          lineWidth: pauseLineWidth,
-          scale: pauseScale,
-          bounds: bounds), forKey: Animation.LeftPlayToPause.key)
-        
-        // right layer
-        rightShapeLayer.addAnimation(Animation.RightPlayToPause.keyframeAnimation(withDuration: animationDuration,
-          lineWidth: pauseLineWidth,
-          scale: pauseScale,
-          bounds: bounds), forKey: Animation.RightPlayToPause.key)
-      }
-    case .Play:
-      if !animated || leftShapeLayer.animationForKey(Animation.LeftPlayToPause.key) != nil { // ongoing animation is cancelled
-        setModelToFinalPath()
-      } else {
-        setModelToFinalPath()
-
-        // left layer
-        leftShapeLayer.addAnimation(Animation.LeftPauseToPlay.keyframeAnimation(withDuration: animationDuration,
-                                                                                  lineWidth: pauseLineWidth,
-                                                                                  scale: pauseScale,
-                                                                                  bounds: bounds), forKey: Animation.LeftPauseToPlay.key)
+    if animated {
+      animationStart = 0
+      displayLink.paused = false
       
+      switch buttonAction {
+      case .Pause:
+        // set model values to final state
+        leftShapeLayer.path = Animation.LeftPlayToPause.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+        rightShapeLayer.path = Animation.RightPlayToPause.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+        
+        // left layer
+        if let _ = leftShapeLayer.animationForKey(Animation.LeftPauseToPlay.key), currentPath = (leftShapeLayer.presentationLayer() as? CAShapeLayer)?.path {
+          leftShapeLayer.removeAllAnimations()
+          
+          let reversedTimeOffset = CFTimeInterval(1.0 - progress)
+          leftShapeLayer.addAnimation(Animation.LeftPlayToPause.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: reversedTimeOffset,
+            fromValue: currentPath), forKey: Animation.LeftPlayToPause.key)
+        } else {
+          progress = 0.0
+          
+          leftShapeLayer.addAnimation(Animation.LeftPlayToPause.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: 0.0,
+            fromValue: nil), forKey: Animation.LeftPlayToPause.key)
+        }
+        
         // right layer
-        rightShapeLayer.addAnimation(Animation.RightPauseToPlay.keyframeAnimation(withDuration: animationDuration,
-                                                                                  lineWidth: pauseLineWidth,
-                                                                                  scale: pauseScale,
-                                                                                  bounds: bounds), forKey: Animation.RightPauseToPlay.key)
+        if let _ = rightShapeLayer.animationForKey(Animation.RightPauseToPlay.key), currentPath = (rightShapeLayer.presentationLayer() as? CAShapeLayer)?.path {
+          rightShapeLayer.removeAllAnimations()
+          
+          let reversedTimeOffset = CFTimeInterval(1.0 - progress)
+          rightShapeLayer.addAnimation(Animation.RightPlayToPause.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: reversedTimeOffset,
+            fromValue: currentPath), forKey: Animation.RightPlayToPause.key)
+        } else {
+          rightShapeLayer.addAnimation(Animation.RightPlayToPause.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: 0.0,
+            fromValue: nil), forKey: Animation.RightPlayToPause.key)
+        }
+        
+      case .Play:
+        // set model values to final state
+        leftShapeLayer.path = Animation.LeftPauseToPlay.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+        rightShapeLayer.path = Animation.LeftPauseToPlay.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+        
+        // left layer
+        if let _ = leftShapeLayer.animationForKey(Animation.LeftPlayToPause.key), currentPath = (leftShapeLayer.presentationLayer() as? CAShapeLayer)?.path {
+          leftShapeLayer.removeAllAnimations()
+          
+          let reversedTimeOffset = CFTimeInterval(1.0 - progress)
+          leftShapeLayer.addAnimation(Animation.LeftPauseToPlay.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: reversedTimeOffset,
+            fromValue: currentPath), forKey: Animation.LeftPauseToPlay.key)
+        } else {
+          progress = 0.0
+          
+          leftShapeLayer.addAnimation(Animation.LeftPauseToPlay.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: 0.0,
+            fromValue: nil), forKey: Animation.LeftPauseToPlay.key)
+        }
+        
+        // right layer
+        if let _ = rightShapeLayer.animationForKey(Animation.RightPlayToPause.key), currentPath = (rightShapeLayer.presentationLayer() as? CAShapeLayer)?.path {
+          rightShapeLayer.removeAllAnimations()
+          
+          let reversedTimeOffset = CFTimeInterval(1.0 - progress)
+          rightShapeLayer.addAnimation(Animation.RightPauseToPlay.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: reversedTimeOffset,
+            fromValue: currentPath), forKey: Animation.RightPauseToPlay.key)
+        } else {
+          rightShapeLayer.addAnimation(Animation.RightPauseToPlay.keyframeAnimation(withDuration: animationDuration,
+            lineWidth: pauseLineWidth,
+            scale: pauseScale,
+            bounds: bounds,
+            timeOffset: 0.0,
+            fromValue: nil), forKey: Animation.RightPauseToPlay.key)
+        }
+      }
+    } else {
+      displayLink.paused = true
+      
+      switch buttonAction {
+      case .Play:
+        leftShapeLayer.path = Animation.LeftPauseToPlay.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+        rightShapeLayer.path = Animation.LeftPauseToPlay.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+      case .Pause:
+        leftShapeLayer.path = Animation.LeftPlayToPause.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+        rightShapeLayer.path = Animation.RightPlayToPause.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
       }
     }
   }
   
-  private func setModelToFinalPath() {
-    switch buttonAction {
-    case .Pause:
-      leftShapeLayer.removeAllAnimations()
-      rightShapeLayer.removeAllAnimations()
-        
-      leftShapeLayer.path = Animation.LeftPlayToPause.finalFrame(pauseLineWidth, atScale: 1.0, bounds: bounds)
-      rightShapeLayer.path = Animation.RightPlayToPause.finalFrame(pauseLineWidth, atScale: 1.0, bounds: bounds)
-    case .Play:
-      leftShapeLayer.removeAllAnimations()
-      rightShapeLayer.removeAllAnimations()
-      
-      leftShapeLayer.path = Animation.LeftPauseToPlay.finalFrame(pauseLineWidth, atScale: 1.0, bounds: bounds)
-      rightShapeLayer.path = Animation.RightPauseToPlay.finalFrame(pauseLineWidth, atScale: 1.0, bounds: bounds)
-    }
-  }
-  
+  private var animationStart: CFTimeInterval = 0
+  private var progress: Float = 0.0
+  private var progressOffset: Float = 0.0
   private func setup() {
-    backgroundColor = .clearColor()
+    displayLink = CADisplayLink(target: self, selector: #selector(tick))
+    displayLink.addToRunLoop(.mainRunLoop(), forMode: NSDefaultRunLoopMode)
+    displayLink.paused = true
+    
+    backgroundColor = .clearColor()//.yellowColor()
     tintColor = .blackColor()
     
     layer.addSublayer(leftShapeLayer)
     layer.addSublayer(rightShapeLayer)
     
     leftShapeLayer.path = Animation.LeftPauseToPlay.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
-    rightShapeLayer.path = Animation.RightPauseToPlay.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+    rightShapeLayer.path = Animation.LeftPauseToPlay.finalFrame(pauseLineWidth, atScale: pauseScale, bounds: bounds)
+  }
+  
+  @objc private func tick() {
+    if animationStart == 0 {
+      animationStart = displayLink.timestamp
+      progressOffset = 1.0 - progress // we already made it this far
+      if progressOffset == 1.0 {
+        progressOffset = 0.0
+      }
+    }
+    progress = min(Float((displayLink.timestamp - animationStart)/(animationDuration)) + progressOffset, 1.0)
+    
+    print(progress)
+    if progress == 1.0 { // animation finished
+      displayLink.paused = true
+      progressOffset = 0.0
+    }
   }
   
   public override func layoutSublayersOfLayer(layer: CALayer) {
