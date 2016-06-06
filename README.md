@@ -11,7 +11,7 @@ This project serves two purposes:
 2. I wanted to create an animation + secondary animation that is reversible through user interaction. WHAT? Okay, so the whole state transition is one keyframe animation, but I cannot just "reverse" the animation, because the secondary animation (animation caused by the movement of the right pause layer) behaves differently depending on the direction (this influences the bending of the line). Since the solution I came up with is not that perfect, which partly results from wrong timing functions, the reversble animation is under another branch and you can just check it out. I consider switching from the `CADisplayLink` approach to a custom layer property animation, where `progress` would range from `0.0` to `1.0` and when there is still an animation going on while hitting the button I would remove the animation and add the reverse animation with `1.0 - progress`. That way I could avoid all the state tracking. 
 
 ## Demo
-![alt tag](RefreshSuccess.gif) 
+![alt tag](PlayPause.gif) 
 
 ## Usage
 
