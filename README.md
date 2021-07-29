@@ -64,7 +64,7 @@ $ pod install
 
 ## Author
 
-Alexander Hüllmandel, alx91@me.com
+Alexander Türk, alx91@me.com
 
 ## License
 
